@@ -1,0 +1,26 @@
+# Build output
+bin/
+Debug/
+Release/
+x64/
+*.obj
+*.o
+*.pdb
+*.ilk
+*.exp
+*.lib
+
+# Visual Studio
+.vs/
+*.VC.db
+*.VC.opendb
+*.vcxproj.user
+*.suo
+*.sdf
+*.opensdf
+ipch/
+
+# MinGW/MSYS2
+*.a
+
+# Binary outputs are in bin/ which is already ignored
