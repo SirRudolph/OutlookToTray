@@ -31,6 +31,8 @@ typedef BOOL (*InstallHookProc)(HINSTANCE);
 typedef BOOL (*UninstallHookProc)();
 typedef HWND (*GetHiddenOutlookWindowProc)();
 typedef void (*ClearHiddenWindowProc)();
+typedef BOOL (*GetOriginalRectProc)(RECT*);
+typedef LONG (*GetOriginalExStyleProc)();
 
 // Globals
 HINSTANCE g_hInstance = NULL;
@@ -46,6 +48,8 @@ InstallHookProc g_InstallHook = NULL;
 UninstallHookProc g_UninstallHook = NULL;
 GetHiddenOutlookWindowProc g_GetHiddenOutlookWindow = NULL;
 ClearHiddenWindowProc g_ClearHiddenWindow = NULL;
+GetOriginalRectProc g_GetOriginalRect = NULL;
+GetOriginalExStyleProc g_GetOriginalExStyle = NULL;
 
 // Debug helper
 void DebugMsg(const wchar_t* msg) {
@@ -116,6 +120,21 @@ void RestoreOutlookWindow() {
         HWND hwnd = g_GetHiddenOutlookWindow();
         DebugMsg(hwnd ? L"Got hidden window handle" : L"No hidden window");
         if (hwnd && IsWindow(hwnd)) {
+            // Restore original extended style (shows in taskbar again)
+            if (g_GetOriginalExStyle) {
+                LONG exStyle = g_GetOriginalExStyle();
+                if (exStyle != 0) {
+                    SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
+                }
+            }
+
+            // Restore original window position
+            RECT origRect = {0};
+            if (g_GetOriginalRect && g_GetOriginalRect(&origRect)) {
+                SetWindowPos(hwnd, NULL, origRect.left, origRect.top, 0, 0,
+                             SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+            }
+
             ShowWindow(hwnd, SW_SHOW);
             ShowWindow(hwnd, SW_RESTORE);
             SetForegroundWindow(hwnd);
@@ -277,6 +296,8 @@ bool LoadHookDll() {
     g_UninstallHook = (UninstallHookProc)GetProcAddress(g_hDll, "UninstallHook");
     g_GetHiddenOutlookWindow = (GetHiddenOutlookWindowProc)GetProcAddress(g_hDll, "GetHiddenOutlookWindow");
     g_ClearHiddenWindow = (ClearHiddenWindowProc)GetProcAddress(g_hDll, "ClearHiddenWindow");
+    g_GetOriginalRect = (GetOriginalRectProc)GetProcAddress(g_hDll, "GetOriginalRect");
+    g_GetOriginalExStyle = (GetOriginalExStyleProc)GetProcAddress(g_hDll, "GetOriginalExStyle");
 
     if (!g_InstallHook || !g_UninstallHook || !g_GetHiddenOutlookWindow) {
         MessageBox(NULL, L"DLL missing required functions", L"Outlook to Tray", MB_ICONERROR);

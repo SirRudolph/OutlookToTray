@@ -16,6 +16,8 @@
 struct SharedData {
     HWND hiddenWindow;
     BOOL subclassed;
+    RECT originalRect;      // Original window position before hiding
+    LONG originalExStyle;   // Original extended style (to restore taskbar visibility)
 };
 
 // Global state (per-process)
@@ -72,10 +74,21 @@ BOOL IsMainWindow(HWND hwnd) {
 LRESULT CALLBACK SubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam,
                                UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
     if (uMsg == WM_CLOSE) {
-        // Hide instead of close
-        ShowWindow(hwnd, SW_HIDE);
         SharedData* pData = GetSharedData();
         if (pData) {
+            // Save original position
+            GetWindowRect(hwnd, &pData->originalRect);
+
+            // Save original extended style and hide from taskbar
+            pData->originalExStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+            SetWindowLong(hwnd, GWL_EXSTYLE,
+                         (pData->originalExStyle | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW);
+
+            // Move window off-screen instead of hiding it completely
+            // This allows notifications to still work (SW_HIDE suppresses them)
+            SetWindowPos(hwnd, NULL, -32000, -32000, 0, 0,
+                         SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+
             pData->hiddenWindow = hwnd;
         }
         return 0;  // Block the close
@@ -161,6 +174,25 @@ extern "C" __declspec(dllexport) void ClearHiddenWindow() {
     if (pData) {
         pData->hiddenWindow = NULL;
     }
+}
+
+// Exported: Get original window rect (for restoring position)
+extern "C" __declspec(dllexport) BOOL GetOriginalRect(RECT* pRect) {
+    SharedData* pData = GetSharedData();
+    if (pData && pRect) {
+        *pRect = pData->originalRect;
+        return TRUE;
+    }
+    return FALSE;
+}
+
+// Exported: Get original extended style (for restoring taskbar visibility)
+extern "C" __declspec(dllexport) LONG GetOriginalExStyle() {
+    SharedData* pData = GetSharedData();
+    if (pData) {
+        return pData->originalExStyle;
+    }
+    return 0;
 }
 
 // DLL entry point
