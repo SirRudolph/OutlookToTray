@@ -1,0 +1,50 @@
+name: Build Windows App
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+
+      - name: Build
+        shell: msys2 {0}
+        run: |
+          mkdir -p bin
+
+          echo "Building DLL..."
+          g++ -std=c++17 -Wall -O2 -DUNICODE -D_UNICODE \
+              -shared -static-libgcc -static-libstdc++ \
+              -o bin/OutlookToTray.dll \
+              OutlookToTray.Dll/OutlookToTray.Dll.cpp \
+              -lpsapi -lcomctl32
+
+          echo "Building EXE resources..."
+          windres OutlookToTray.Exe/OutlookToTray.rc -o bin/resources.o
+
+          echo "Building EXE..."
+          g++ -std=c++17 -Wall -O2 -DUNICODE -D_UNICODE \
+              -mwindows -static-libgcc -static-libstdc++ \
+              -o bin/OutlookToTray.exe \
+              OutlookToTray.Exe/OutlookToTray.Exe.cpp \
+              bin/resources.o \
+              -lshell32 -lpsapi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: OutlookToTray-build
+          path: bin/
